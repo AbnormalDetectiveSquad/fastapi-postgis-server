@@ -2,15 +2,23 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
+import platform
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# 환경변수에서 DB 설정 가져오기
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:vlftnqhdks12#@localhost:5432/ads_db"
-)
+SYSTEM = platform.system()
+
+if SYSTEM == "Windows":
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL",
+        "postgresql://postgres:vlftnqhdks12#@localhost:5432/ads_db"
+    )
+else:
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL",
+        "postgresql://postgres:vlftnqhdks12#@database-1.c1k4eq2gakh2.ap-northeast-2.rds.amazonaws.com:5432/ads_db"
+    )
 
 # 엔진 설정에 추가 옵션
 engine = create_engine(
