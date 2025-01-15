@@ -1,21 +1,15 @@
-from fastapi import FastAPI, Depends, Path, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from geoalchemy2.shape import from_shape, to_shape
 from shapely.geometry import Point, LineString, mapping
 from datetime import datetime
 from typing import Optional
 import models, schemas
-from database import SessionLocal, engine
+from database import get_db
+from scheduler import lifespan_scheduler, init_scheduler
 
-app = FastAPI()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+app = FastAPI(lifespan=lifespan_scheduler)
+init_scheduler()
 
 @app.get("/")
 def read_root():
