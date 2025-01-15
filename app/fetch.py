@@ -29,40 +29,52 @@ async def fetch_data_weather(db: Session):
     BASE_URL = 'http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst'
 
     base_date, base_time, tm = get_base_datetime()
+    print(f"Starting weather data fetch for {base_date} {base_time}")
 
     async with httpx.AsyncClient() as client:
         try:
             for coordinates in SEOUL_COORDINATES:
-                (nx, ny) = coordinates
-                # base_date, base_time 관련 로직 추가
-                params = {'serviceKey': API_KEY, 'pageNo': '1', 'numOfRows': '1000',
-                          'dataType': 'JSON', 'base_date': base_date, 'base_time': base_time,
-                          'nx': nx, 'ny': ny}
+                try:
+                    (nx, ny) = coordinates
+                    # base_date, base_time 관련 로직 추가
+                    params = {'serviceKey': API_KEY, 'pageNo': '1', 'numOfRows': '1000',
+                              'dataType': 'JSON', 'base_date': base_date, 'base_time': base_time,
+                              'nx': nx, 'ny': ny}
 
-                # API에서 데이터 가져오기
-                response = await client.get(BASE_URL, params=params, timeout=10)
-                data = response.json()
+                    # API에서 데이터 가져오기
+                    response = await client.get(BASE_URL, params=params, timeout=10)
+                    response.raise_for_status()  # HTTP 에러 체크
+                    data = response.json()
 
-                pty = [item for item in data['response']['body']['items']['item']
-                       if item['category'] == 'PTY'][0]
-                rn1 = [item for item in data['response']['body']['items']['item']
-                       if item['category'] == 'RN1'][0]
+                    items = data['response']['body']['items']['item']
+                    pty = next(item for item in items if item['category'] == 'PTY')
+                    rn1 = next(item for item in items if item['category'] == 'RN1')
 
-                pty_value = int(pty['obsrValue'])
-                rn1_value = round(float(rn1['obsrValue']), 1)
+                    pty_value = int(pty['obsrValue'])
+                    rn1_value = round(float(rn1['obsrValue']), 1)
+                    print(f"Fetched data for nx={nx}, ny={ny}: PTY={pty_value}, RN1={rn1_value}")
 
-                new_record = KmaWeatherData(
-                    nx=nx, ny=ny, tm=tm,
-                    pty=pty_value,
-                    rn1=rn1_value
-                )
+                    new_record = KmaWeatherData(
+                        nx=nx, ny=ny, tm=tm,
+                        pty=pty_value,
+                        rn1=rn1_value
+                    )
 
-                db.add(new_record)
-                db.commit()
+                    db.add(new_record)
+
+                except Exception as e:
+                    print(f"Error processing coordinates ({nx}, {ny}): {str(e)}")
+                    db.rollback()
+                    continue
+
+            db.commit()
+            print("Successfully committed all records")
 
         except Exception as e:
-            print(f"Error fetching data: {e}")
+            print(f"Fatal error in fetch_data_weather: {str(e)}")
             db.rollback()
+            raise
+
 
 
 async def fetch_data_traffic(db: Session):
