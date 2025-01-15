@@ -56,7 +56,7 @@ class ItsTrafficData(Base):
     road_authority = Column(Integer)
     speed = Column(Numeric(5,1))
     travel_time = Column(Integer)
-    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    # created_at = Column(DateTime, nullable=False, server_default=func.now())
 
 
 class KmaWeatherData(Base):

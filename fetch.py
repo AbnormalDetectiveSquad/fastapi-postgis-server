@@ -66,15 +66,15 @@ async def fetch_data_traffic(db: Session):
     API_KEY = '25b9372d7c39424aa49f2c27c47c6276'
     BASE_URL = "https://openapi.its.go.kr:9443/trafficInfo"
 
-    # 서울 위경도 범위 check
+    # 서울 위경도 범위 check (현재 강남구 한정)
     params = {
         'apiKey': API_KEY,
         'type': 'all',
         'getType': 'json',
-        'minX': 126.8,
-        'maxX': 127.89,
-        'minY': 34.9,
-        'maxY': 35.1,
+        'minX': 127.01,
+        'maxX': 127.13,
+        'minY': 37.45,
+        'maxY': 37.54,
     }
 
     async with httpx.AsyncClient() as client:
