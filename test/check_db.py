@@ -3,8 +3,8 @@ import os
 import time
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database import get_db
-from models import KmaWeatherData, ItsTrafficData
+from app.database import get_db
+from app.models import KmaWeatherData, ItsTrafficData
 from datetime import datetime, timedelta
 
 

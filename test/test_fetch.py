@@ -4,8 +4,8 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database import get_db
-from fetch import fetch_data_weather, fetch_data_traffic, get_base_datetime
+from app.database import get_db
+from app.fetch import fetch_data_weather, fetch_data_traffic, get_base_datetime
 
 async def test_weather():
     print("=== 날씨 데이터 테스트 시작 ===")

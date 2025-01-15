@@ -1,5 +1,4 @@
-from fastapi import FastAPI, Depends, Path, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from geoalchemy2.shape import from_shape, to_shape
 from shapely.geometry import Point, LineString, mapping
