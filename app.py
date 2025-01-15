@@ -6,16 +6,11 @@ from shapely.geometry import Point, LineString, mapping
 from datetime import datetime
 from typing import Optional
 import models, schemas
-from database import SessionLocal, engine
+from database import get_db
+from scheduler import lifespan_scheduler, init_scheduler
 
-app = FastAPI()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+app = FastAPI(lifespan=lifespan_scheduler)
+init_scheduler()
 
 @app.get("/")
 def read_root():

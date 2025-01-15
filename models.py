@@ -51,15 +51,19 @@ class LinkNodeNetwork(Base):
 class ItsTrafficData(Base):
     __tablename__ = 'its_traffic_data'
     
-    id = Column(BigInteger, primary_key=True)
     tm = Column(DateTime, primary_key=True)
-    link_id = Column(String(10), nullable=False, index=True)
+    link_id = Column(String(10), primary_key=True, nullable=False)
     road_authority = Column(Integer)
-    speed = Column(Numeric(5,1), index=True)
+    speed = Column(Numeric(5,1))
     travel_time = Column(Integer)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
 
-    # 복합 인덱스 정의
-    __table_args__ = (
-        {'postgresql_partition_by': 'RANGE (tm)'}
-    )
+
+class KmaWeatherData(Base):
+    __tablename__ = 'kma_weather_data'
+
+    nx = Column(Integer, primary_key=True, nullable=False)
+    ny = Column(Integer, primary_key=True, nullable=False)
+    tm = Column(DateTime, primary_key=True, nullable=False)
+    pty = Column(Numeric(5,1))
+    rn1 = Column(Numeric(5,1))
