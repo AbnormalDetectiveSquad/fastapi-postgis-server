@@ -11,7 +11,7 @@ def init_scheduler():
     # 기상데이터: 매시간 40분에 실행
     scheduler.add_job(
         fetch_data_weather,
-        trigger=CronTrigger(minutes=40),
+        trigger=CronTrigger(minute=40),
         args=[next(get_db())],
         id="fetch_weather"
     )
