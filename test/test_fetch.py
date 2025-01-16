@@ -7,12 +7,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.database import get_db
 from app.fetch import fetch_data_weather, fetch_data_traffic, get_base_datetime
 
-async def test_weather():
+async def test_weather(tm=None):
     print("=== 날씨 데이터 테스트 시작 ===")
     db = next(get_db())
     try:
         base_date, base_time, tm = get_base_datetime()
-        print(f"기준 시간: {base_date} {base_time}")
+        print(f"기준 시간: {base_date} {base_time} {tm}")
         await fetch_data_weather(db)
         print("날씨 데이터 수집 성공")
     except Exception as e:
@@ -34,5 +34,5 @@ async def run_all_tests():
 
 if __name__ == "__main__":
     # asyncio.run(run_all_tests())
-    # asyncio.run(test_weather())
-    asyncio.run(test_traffic())
+    asyncio.run(test_weather())
+    # asyncio.run(test_traffic())

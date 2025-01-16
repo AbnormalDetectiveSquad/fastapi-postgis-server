@@ -68,3 +68,13 @@ class KmaWeatherData(Base):
     pty = Column(Numeric(5,1))
     rn1 = Column(Numeric(5,1))
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class TrafficPrediction(Base):
+    __tablename__ = "traffic_predictions"
+    
+    link_id = Column(String(10), primary_key=True)
+    prediction_5min = Column(Numeric(5,1), nullable=False)
+    prediction_10min = Column(Numeric(5,1), nullable=False)
+    prediction_15min = Column(Numeric(5,1), nullable=False)
+    created_at = Column(DateTime, primary_key=True)
