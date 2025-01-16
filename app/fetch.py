@@ -2,7 +2,15 @@ import httpx
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from urllib.parse import unquote
-from models import ItsTrafficData, KmaWeatherData  # DB 모델 임포트
+from models import ItsTrafficData, KmaWeatherData 
+import logging
+from zoneinfo import ZoneInfo
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+logger = logging.getLogger(__name__)
 
 SEOUL_COORDINATES = [(60, 127), (61, 127), (60, 126), (59, 126), (61, 126), (62, 126), (62, 127), (62, 128), (60, 128),
                      (61, 128), (61, 129), (62, 129), (59, 127), (59, 128), (58, 127), (58, 126), (57, 126), (57, 127),
@@ -11,7 +19,7 @@ SEOUL_COORDINATES = [(60, 127), (61, 127), (60, 126), (59, 126), (61, 126), (62,
 
 # base_date와 base_time을 계산하는 함수
 def get_base_datetime():
-    now = datetime.now()
+    now = datetime.now(tz=ZoneInfo("Asia/Seoul"))
     # 현재 시각이 40분 이전이면 이전 시각의 데이터를 가져옴
     if now.minute < 40:
         now = now - timedelta(hours=1)
@@ -29,7 +37,7 @@ async def fetch_data_weather(db: Session):
     BASE_URL = 'http://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst'
 
     base_date, base_time, tm = get_base_datetime()
-    print(f"Starting weather data fetch for {base_date} {base_time}")
+    logger.info(f"Starting weather data fetch for {base_date} {base_time}")
 
     async with httpx.AsyncClient() as client:
         try:
@@ -52,7 +60,7 @@ async def fetch_data_weather(db: Session):
 
                     pty_value = int(pty['obsrValue'])
                     rn1_value = round(float(rn1['obsrValue']), 1)
-                    print(f"Fetched data for nx={nx}, ny={ny}: PTY={pty_value}, RN1={rn1_value}")
+                    logger.info(f"Fetched data for nx={nx}, ny={ny}: PTY={pty_value}, RN1={rn1_value}")
 
                     new_record = KmaWeatherData(
                         nx=nx, ny=ny, tm=tm,
@@ -63,15 +71,15 @@ async def fetch_data_weather(db: Session):
                     db.add(new_record)
 
                 except Exception as e:
-                    print(f"Error processing coordinates ({nx}, {ny}): {str(e)}")
+                    logger.error(f"Error processing coordinates ({nx}, {ny}): {str(e)}")
                     db.rollback()
                     continue
 
             db.commit()
-            print("Successfully committed all records")
+            logger.info("Successfully committed all records")
 
         except Exception as e:
-            print(f"Fatal error in fetch_data_weather: {str(e)}")
+            logger.error(f"Fatal error in fetch_data_weather: {str(e)}")
             db.rollback()
             raise
 
@@ -117,6 +125,6 @@ async def fetch_data_traffic(db: Session):
             db.commit()
 
         except Exception as e:
-            print(f"Error fetching data: {e}")
+            logger.error(f"Error fetching data: {e}")
             db.rollback()
 

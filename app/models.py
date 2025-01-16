@@ -67,3 +67,4 @@ class KmaWeatherData(Base):
     tm = Column(DateTime, primary_key=True, nullable=False)
     pty = Column(Numeric(5,1))
     rn1 = Column(Numeric(5,1))
+    updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
