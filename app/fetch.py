@@ -26,8 +26,7 @@ def get_base_datetime():
 
     base_date = now.strftime("%Y%m%d")
     base_time = now.strftime("%H00")
-    tm = now.replace(minute=0, second=0, microsecond=0)
-
+    tm = now.replace(minute=0, second=0, microsecond=0).replace(tzinfo=None)
     return base_date, base_time, tm
 
 
@@ -38,6 +37,7 @@ async def fetch_data_weather(db: Session):
 
     base_date, base_time, tm = get_base_datetime()
     logger.info(f"Starting weather data fetch for {base_date} {base_time}")
+    logger.info(f"base_date: {base_date}, base_time: {base_time}, tm: {tm}")
 
     async with httpx.AsyncClient() as client:
         try:
