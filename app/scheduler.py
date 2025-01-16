@@ -1,6 +1,7 @@
 # scheduler.py
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
 from contextlib import asynccontextmanager
 from database import get_db
 from fetch import fetch_data_weather, fetch_data_traffic
@@ -13,6 +14,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
+
+def job_listener(event):
+    if event.code == EVENT_JOB_EXECUTED:
+        logger.info(f"Job executed successfully: {event.job_id}")
+    elif event.code == EVENT_JOB_ERROR:
+        logger.error(f"Job failed: {event.job_id}")
+        logger.error(f"Exception: {event.exception}")
 
 def init_scheduler():
     # 기상데이터: 매시간 40분에 실행
@@ -32,15 +40,8 @@ def init_scheduler():
         id="fetch_traffic"
     )
 
-    # 로깅 추가
-    @scheduler.listener('job_executed')
-    def job_executed(event):
-        logger.info(f"Job executed: {event.job_id}")
+    scheduler.add_listener(job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
 
-    @scheduler.listener('job_error')
-    def job_error(event):
-        logger.error(f"Job failed: {event.job_id}")
-        logger.error(f"Exception: {event.exception}")
 
 @asynccontextmanager
 async def lifespan_scheduler(app):
