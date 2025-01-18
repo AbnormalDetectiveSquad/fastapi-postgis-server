@@ -60,7 +60,7 @@ async def fetch_data_weather(db: Session):
 
                     pty_value = int(pty['obsrValue'])
                     rn1_value = round(float(rn1['obsrValue']), 1)
-                    logger.info(f"Fetched data for nx={nx}, ny={ny}: PTY={pty_value}, RN1={rn1_value}")
+                    # logger.info(f"Fetched data for nx={nx}, ny={ny}: PTY={pty_value}, RN1={rn1_value}")
 
                     new_record = KmaWeatherData(
                         nx=nx, ny=ny, tm=tm,

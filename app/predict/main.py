@@ -1,13 +1,11 @@
 import logging
 import warnings
-import sys
-sys.path.append('../../')
-sys.path.append('../')
 from predict.model import utility as U
 from database import get_db
 from models import ItsTrafficData, KmaWeatherData, LinkGridMapping, TrafficPrediction
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+import holidays
 import pandas as pd
 
 logging.basicConfig(level=logging.INFO)
@@ -26,97 +24,115 @@ def read_config():
 
 # 단독실행 테스트 코드 (추후 async 및 db commit 추가)
 def predict_model():
-    db = next(get_db())
-    # 모델 실행시점 (임시 지정)
-    now = datetime(2024, 10, 1, 2, 0)
-    two_hours_ago = now - timedelta(hours=2)
+    try:
+        db = next(get_db())
+        # 모델 실행시점 (임시 지정)
+        now = datetime(2024, 10, 1, 2, 0)
+        two_hours_ago = now - timedelta(hours=2)
 
-    # 모델 실행시점 이전 데이터 조회
-    # 1. 교통 데이터 조회
-    traffic_rows = db.query(ItsTrafficData.tm, 
-                          ItsTrafficData.link_id, 
-                          ItsTrafficData.speed)\
-                    .filter(ItsTrafficData.tm.between(two_hours_ago, now))\
-                    .all()
+        # 모델 실행시점 이전 데이터 조회
+        # 1. 교통 데이터 조회
+        traffic_rows = db.query(ItsTrafficData.tm, 
+                            ItsTrafficData.link_id, 
+                            ItsTrafficData.speed)\
+                        .filter(ItsTrafficData.tm.between(two_hours_ago, now))\
+                        .all()
 
-    df_traffic = pd.DataFrame(traffic_rows, columns=['tm', 'link_id', 'speed'])
+        df_traffic = pd.DataFrame(traffic_rows, columns=['tm', 'link_id', 'speed'])
 
-    # 2. 기상 데이터 조회 (기상데이터는 조회 시간을 한시간 더 이전으로 설정)
-    three_hours_ago = now - timedelta(hours=3)
-    weather_rows = db.query(KmaWeatherData.tm, 
-                          KmaWeatherData.nx, 
-                          KmaWeatherData.ny, 
-                          KmaWeatherData.pty, 
-                          KmaWeatherData.rn1)\
-                    .filter(KmaWeatherData.tm.between(three_hours_ago, now))\
-                    .all()
+        # 2. 기상 데이터 조회 (기상 데이터는 조회 시간을 한시간 더 이전으로 설정)
+        three_hours_ago = now - timedelta(hours=3)
+        weather_rows = db.query(KmaWeatherData.tm, 
+                            KmaWeatherData.nx, 
+                            KmaWeatherData.ny, 
+                            KmaWeatherData.pty, 
+                            KmaWeatherData.rn1)\
+                        .filter(KmaWeatherData.tm.between(three_hours_ago, now))\
+                        .all()
 
-    df_weather = pd.DataFrame(weather_rows, columns=['tm', 'nx', 'ny', 'pty', 'rn1'])
-    # 5분 간격으로 리샘플 후 forward fill (TODO 예외처리)
-    df_weather_resampled = df_weather.set_index('tm')\
-        .groupby(['nx', 'ny'])\
-        .resample('5T')\
-        .ffill()\
-        .reset_index() 
+        df_weather = pd.DataFrame(weather_rows, columns=['tm', 'nx', 'ny', 'pty', 'rn1'])
 
-    # 3. 링크 그리드 매핑 데이터 조회
-    link_mapping = db.query(LinkGridMapping.link_id, LinkGridMapping.nx, LinkGridMapping.ny).all()
-    df_mapping = pd.DataFrame(link_mapping, columns=['link_id', 'nx', 'ny'])
 
-    df_traffic_with_grid = df_traffic.merge(df_mapping, on='link_id', how='inner')
+        # 3. 링크 그리드 매핑 데이터 조회
+        link_mapping = db.query(LinkGridMapping.link_id, 
+                                LinkGridMapping.nx, 
+                                LinkGridMapping.ny).all()
+        df_mapping = pd.DataFrame(link_mapping, columns=['link_id', 'nx', 'ny'])
 
-    # 4. 교통 데이터와 기상 데이터 결합
-    df_combined = df_traffic_with_grid.merge(
-        df_weather_resampled,
-        on=['nx', 'ny', 'tm'],
-        how='left'
-    )
+        df_traffic_with_grid = df_traffic.merge(df_mapping, on='link_id', how='inner')
 
-    # 요일 정보 계산 (todo 휴일 추가)
-    today = datetime.now(tz=ZoneInfo("Asia/Seoul"))
-    weekday = today.weekday()
-    if weekday == 0:
-        weakday = 0
-    elif weekday == 4:
-        weakday = 0.5
-    elif weekday in [5,6]:
-        weakday = 1
-    else:
-        weakday = 0.1
+        # 4. 교통 데이터와 기상 데이터 결합
+        ## 기상데이터 5분 간격으로 리샘플 후 forward fill 
+        if len(df_weather) == 0:
+            logging.warning("기상 데이터가 없습니다 - 기본값(0) 사용")
+            # traffic 데이터의 모든 nx, ny 조합에 대해 0으로 채움
+            df_weather_resampled = df_traffic_with_grid[['tm', 'nx', 'ny']].drop_duplicates()
+            df_weather_resampled['pty'] = 0
+            df_weather_resampled['rn1'] = 0
+        else:
+            df_weather_resampled = df_weather.set_index('tm')\
+            .groupby(['nx', 'ny'])\
+            .resample('5T')\
+            .ffill()\
+            .fillna({
+                'pty': 0,  # (결측 시 처리) 강수형태 없음(0)
+                'rn1': 0   # (결측 시 처리) 강수량 0
+            })\
+            .reset_index()
 
-    reader = U.Datareader()
-    result = reader.process_data(df_combined, weakday)
+        df_combined = df_traffic_with_grid.merge(
+            df_weather_resampled,
+            on=['nx', 'ny', 'tm'],
+            how='left'
+        )
 
-    # 예측 결과 저장 (created_at:UTC, 예측 결과:result)
-    result['created_at'] = datetime.now()  # UTC 시간
-    result = result.rename(columns=
-        {
-            'Link_ID': 'link_id',
-            '5 min': 'prediction_5min',
-            '10 min': 'prediction_10min',
-            '15 min': 'prediction_15min'
-        }
-    )
+        # 결측치 최종 확인
+        df_combined['pty'] = df_combined['pty'].fillna(0)
+        df_combined['rn1'] = df_combined['rn1'].fillna(0)
 
-    # 예측 결과 저장
-    db.add(TrafficPrediction(
-        tm=now,
-        link_id=result['link_id'],
-        prediction_5min=result['prediction_5min'],
-        prediction_10min=result['prediction_10min'],
-        prediction_15min=result['prediction_15min']
-    ))
-    db.commit()
+        # 요일 정보 계산
+        today = datetime.now(tz=ZoneInfo("Asia/Seoul"))
+        # 공휴일 확인
+        kr_holidays = holidays.KR()
+        is_holiday = today.strftime('%Y-%m-%d') in kr_holidays
 
-if __name__ == "__main__":
+        weekday = today.weekday()
+        if weekday == 0:
+            weakday = 0
+        elif weekday == 4:
+            weakday = 0.5
+        elif (weekday in [5,6]) or is_holiday:
+            weakday = 1
+        else:
+            weakday = 0.1
 
-    y=U.TestScript()
-    print(y)
-    print(y.shape)
-    reader=U.Datareader(option='test')
-    # test array 추가
-    A,B,C,D,E,F=reader.testarrays.copy()
-    print(f'test data:{A},{B},{C},{D},{E},{F}')
-    out=reader.process_data(A,B,C,D,E,F)
-    print (f'outdata:{out}')
-    print (out.shape)
+        # 예측 수행
+        reader = U.Datareader()
+        result = reader.process_data(df_combined, weakday)
+
+        # 예측 결과 저장 (created_at:UTC, 예측 결과:result)
+        result['created_at'] = datetime.now()  # UTC 시간
+        result = result.rename(columns=
+            {
+                'Link_ID': 'link_id',
+                '5 min': 'prediction_5min',
+                '10 min': 'prediction_10min',
+                '15 min': 'prediction_15min'
+            }
+        )
+
+        # 예측 결과 저장
+        db.add(TrafficPrediction(
+            tm=now,
+            link_id=result['link_id'],
+            prediction_5min=result['prediction_5min'],
+            prediction_10min=result['prediction_10min'],
+            prediction_15min=result['prediction_15min']
+        ))
+        db.commit()
+        logging.info(f"Successfully committed prediction result at {now}")
+
+    except Exception as e:
+        logging.error(f"Error committing prediction result: {str(e)}")
+        db.rollback()
+        raise
