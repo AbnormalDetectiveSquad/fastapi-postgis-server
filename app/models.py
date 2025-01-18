@@ -47,6 +47,13 @@ class LinkNodeNetwork(Base):
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
 
 
+class LinkGridMapping(Base):
+    __tablename__ = "link_grid_mapping"
+
+    link_id = Column(String(10), primary_key=True)
+    nx = Column(Integer)
+    ny = Column(Integer)
+
 
 class ItsTrafficData(Base):
     __tablename__ = 'its_traffic_data'

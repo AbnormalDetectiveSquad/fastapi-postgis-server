@@ -10,10 +10,7 @@ load_dotenv()
 SYSTEM = platform.system()
 
 if SYSTEM == "Windows":
-    DATABASE_URL = os.getenv(
-        "DATABASE_URL",
-        "postgresql://postgres:vlftnqhdks12#@localhost:5432/ads_db"
-    )
+    DATABASE_URL = "postgresql://postgres:vlftnqhdks12#@localhost:5432/ads_db"
 else:
     DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -31,6 +28,7 @@ Base = declarative_base()
 
 def get_db():
     db = SessionLocal()
+    print(DATABASE_URL)
     try:
         yield db
     finally:
