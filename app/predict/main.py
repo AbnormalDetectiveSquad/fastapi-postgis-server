@@ -4,8 +4,8 @@ import sys
 sys.path.append('../../')
 sys.path.append('../')
 from predict.model import utility as U
-from app.database import get_db
-from app.models import ItsTrafficData, KmaWeatherData, LinkGridMapping, TrafficPrediction
+from database import get_db
+from models import ItsTrafficData, KmaWeatherData, LinkGridMapping, TrafficPrediction
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import pandas as pd
@@ -42,16 +42,23 @@ def predict_model():
 
     df_traffic = pd.DataFrame(traffic_rows, columns=['tm', 'link_id', 'speed'])
 
-    # 2. 기상 데이터 조회
+    # 2. 기상 데이터 조회 (기상데이터는 조회 시간을 한시간 더 이전으로 설정)
+    three_hours_ago = now - timedelta(hours=3)
     weather_rows = db.query(KmaWeatherData.tm, 
-                          KmaWeatherData.nx, 
-                          KmaWeatherData.ny, 
-                          KmaWeatherData.pty, 
-                          KmaWeatherData.rn1)\
-                    .filter(KmaWeatherData.tm.between(two_hours_ago, now))\
+                            KmaWeatherData.nx, 
+                            KmaWeatherData.ny, 
+                            KmaWeatherData.pty, 
+                            KmaWeatherData.rn1)\
+                    .filter(KmaWeatherData.tm.between(three_hours_ago, now))\
                     .all()
 
     df_weather = pd.DataFrame(weather_rows, columns=['tm', 'nx', 'ny', 'pty', 'rn1'])
+    # 5분 간격으로 리샘플 후 forward fill
+    df_weather_resampled = df_weather.set_index('tm')\
+        .groupby(['nx', 'ny'])\
+        .resample('5T')\
+        .ffill()\
+        .reset_index() 
 
     # 3. 링크 그리드 매핑 데이터 조회
     link_mapping = db.query(LinkGridMapping.link_id, LinkGridMapping.nx, LinkGridMapping.ny).all()
@@ -61,7 +68,7 @@ def predict_model():
 
     # 4. 교통 데이터와 기상 데이터 결합
     df_combined = df_traffic_with_grid.merge(
-        df_weather,
+        df_weather_resampled,
         on=['nx', 'ny', 'tm'],
         how='left'
     )
@@ -93,7 +100,7 @@ def predict_model():
 
     reader = U.Datareader()
 
-    result = reader.process_data(A,B,C,D,E,F)
+    result = reader.process_data(df_combined,weakday)
 
     # 예측 결과 저장 (created_at:UTC, 예측 결과:result)
     result['created_at'] = datetime.now()  # UTC 시간
@@ -106,15 +113,15 @@ def predict_model():
         }
     )
 
-    # 예측 결과 저장
-    db.add(TrafficPrediction(
-        tm=now,
-        link_id=result['link_id'],
-        prediction_5min=result['prediction_5min'],
-        prediction_10min=result['prediction_10min'],
-        prediction_15min=result['prediction_15min']
-    ))
-    db.commit()
+   ## 예측 결과 저장
+   #db.add(TrafficPrediction(
+   #    tm=now,
+   #    link_id=result['link_id'],
+   #    prediction_5min=result['prediction_5min'],
+   #    prediction_10min=result['prediction_10min'],
+   #    prediction_15min=result['prediction_15min']
+   #))
+   #db.commit()
 
 if __name__ == "__main__":
 

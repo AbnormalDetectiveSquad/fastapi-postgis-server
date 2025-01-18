@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker 
 import os
 import platform
 from dotenv import load_dotenv
@@ -9,8 +9,8 @@ load_dotenv()
 
 SYSTEM = platform.system()
 
-if SYSTEM == "Windows":
-    DATABASE_URL = "postgresql://postgres:vlftnqhdks12#@localhost:5432/ads_db"
+if SYSTEM == "Linux":
+    DATABASE_URL = "postgresql://postgres:abcd@localhost:5432/test_model"
 else:
     DATABASE_URL = os.getenv("DATABASE_URL")
 
