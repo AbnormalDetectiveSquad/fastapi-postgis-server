@@ -4,8 +4,8 @@ import sys
 sys.path.append('../../')
 sys.path.append('../')
 from predict.model import utility as U
-from app.database import get_db
-from app.models import ItsTrafficData, KmaWeatherData, LinkGridMapping, TrafficPrediction
+from database import get_db
+from models import ItsTrafficData, KmaWeatherData, LinkGridMapping, TrafficPrediction
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import pandas as pd
@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 # 설정 파일 읽기 
 def read_config():
    config = U.configparser.ConfigParser()
-   config.read('./model/config.ini')
+   config.read('config.ini')
    
    # 읽은 값 출력해보기
    print(f"총 배열 개수: {config['arrays']['number']}")   
@@ -32,8 +32,7 @@ def predict_model():
     two_hours_ago = now - timedelta(hours=2)
 
     # 모델 실행시점 이전 데이터 조회
-    # !! 부등호 맞춰서 수정해야 함 !!
-    # 1. 교통 데이터 조회 
+    # 1. 교통 데이터 조회
     traffic_rows = db.query(ItsTrafficData.tm, 
                           ItsTrafficData.link_id, 
                           ItsTrafficData.speed)\
@@ -42,16 +41,23 @@ def predict_model():
 
     df_traffic = pd.DataFrame(traffic_rows, columns=['tm', 'link_id', 'speed'])
 
-    # 2. 기상 데이터 조회
+    # 2. 기상 데이터 조회 (기상데이터는 조회 시간을 한시간 더 이전으로 설정)
+    three_hours_ago = now - timedelta(hours=3)
     weather_rows = db.query(KmaWeatherData.tm, 
                           KmaWeatherData.nx, 
                           KmaWeatherData.ny, 
                           KmaWeatherData.pty, 
                           KmaWeatherData.rn1)\
-                    .filter(KmaWeatherData.tm.between(two_hours_ago, now))\
+                    .filter(KmaWeatherData.tm.between(three_hours_ago, now))\
                     .all()
 
     df_weather = pd.DataFrame(weather_rows, columns=['tm', 'nx', 'ny', 'pty', 'rn1'])
+    # 5분 간격으로 리샘플 후 forward fill (TODO 예외처리)
+    df_weather_resampled = df_weather.set_index('tm')\
+        .groupby(['nx', 'ny'])\
+        .resample('5T')\
+        .ffill()\
+        .reset_index() 
 
     # 3. 링크 그리드 매핑 데이터 조회
     link_mapping = db.query(LinkGridMapping.link_id, LinkGridMapping.nx, LinkGridMapping.ny).all()
@@ -61,25 +67,12 @@ def predict_model():
 
     # 4. 교통 데이터와 기상 데이터 결합
     df_combined = df_traffic_with_grid.merge(
-        df_weather,
+        df_weather_resampled,
         on=['nx', 'ny', 'tm'],
         how='left'
     )
 
-    # 5. 교통 데이터와 기상 데이터 피벗
-    df_combined_pivot = df_combined.melt(
-        id_vars=['link_id', 'tm'],
-        value_vars=['speed', 'pty', 'rn1']
-    ).pivot_table(
-        index='link_id',
-        columns=['tm', 'variable'],
-        values='value'
-    ).reset_index()
-
-    target_time = datetime(2024, 10, 1, 1, 0)
-    print(df_combined_pivot[df_combined_pivot['link_id'] == '1030022200'][(target_time, 'speed')])
-
-    # 요일 정보 계산
+    # 요일 정보 계산 (todo 휴일 추가)
     today = datetime.now(tz=ZoneInfo("Asia/Seoul"))
     weekday = today.weekday()
     if weekday == 0:
@@ -92,8 +85,7 @@ def predict_model():
         weakday = 0.1
 
     reader = U.Datareader()
-
-    result = reader.process_data(A,B,C,D,E,F)
+    result = reader.process_data(df_combined, weakday)
 
     # 예측 결과 저장 (created_at:UTC, 예측 결과:result)
     result['created_at'] = datetime.now()  # UTC 시간
