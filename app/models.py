@@ -81,7 +81,13 @@ class TrafficPrediction(Base):
     __tablename__ = "traffic_predictions"
     
     link_id = Column(String(10), primary_key=True)
+    tm = Column(DateTime, primary_key=True)
     prediction_5min = Column(Numeric(5,1), nullable=False)
     prediction_10min = Column(Numeric(5,1), nullable=False)
     prediction_15min = Column(Numeric(5,1), nullable=False)
-    created_at = Column(DateTime, primary_key=True)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+class linkidsortorder(Base):
+    __tablename__ = 'link_id_sort_order'
+    matrix_index = Column(Integer, primary_key=True, nullable=False)
+    link_id = Column(String(10), primary_key=True, nullable=False)

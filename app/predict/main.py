@@ -30,6 +30,13 @@ def predict_traffic(db: Session):
             second=0,
             microsecond=0
         )
+
+        time_intervals = [now - timedelta(minutes=5 * i) for i in range(24)]
+        # 시간 데이터를 판다스 데이터프레임으로 변환
+        time_series = pd.DataFrame({'Time': sorted(time_intervals)})
+        # 데이터프레임 시간순 정렬 (이미 정렬된 상태)
+        time_series_sorted = time_series.sort_values(by='Time').reset_index(drop=True)
+
         two_hours_ago = now - timedelta(hours=2)
         logging.info(f"Starting traffic prediction for time window: {two_hours_ago} to {now}")
 
@@ -58,8 +65,23 @@ def predict_traffic(db: Session):
                         .all()
 
         df_weather = pd.DataFrame(weather_rows, columns=['tm', 'nx', 'ny', 'pty', 'rn1'])
+        df_weather['tm'] = pd.to_datetime(df_weather['tm'])
         logging.info(f"Retrieved {len(df_weather)} weather records")
 
+        def resample_each_group(sub_df):
+            # 그룹 내부에서 tm을 인덱스로 잡고 리샘플링
+            return (sub_df
+                    .set_index('tm')
+                    .resample('5T')
+                    .ffill()
+                    )
+
+        df_weather_resampled = (
+            df_weather
+            .groupby(['nx', 'ny'], group_keys=False)
+            .apply(resample_each_group)
+            .reset_index()  # 인덱스를 풀어 컬럼화
+        )
         # 3. 링크 그리드 매핑 데이터 조회
         link_mapping = db.query(LinkGridMapping.link_id,
                                 LinkGridMapping.nx,
