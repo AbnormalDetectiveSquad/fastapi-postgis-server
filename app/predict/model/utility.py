@@ -180,7 +180,13 @@ def calculation(dataM):
     y = model(example_input).squeeze(1).numpy()[0, :, :]
     for i in range(0, 3):
         y[i, :] = zscore.inverse_transform(y[i, :].reshape(-1, 1).T)
-    return y
+    y = y.T
+    Result = pd.DataFrame(y)
+    Result['5min'] = Result[0]
+    Result['10min'] = Result[1]
+    Result['15min'] = Result[2]
+    Result = Result.drop([0, 1, 2], axis=1)
+    return Result
 
 
 

@@ -12,29 +12,20 @@ logging.basicConfig(level=logging.INFO)
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# 설정 파일 읽기 
-def read_config():
-   config = U.configparser.ConfigParser()
-   config.read('config.ini')
-   
-   # 읽은 값 출력해보기
-   print(f"총 배열 개수: {config['arrays']['number']}")   
-   return config
-
-
-def predict_traffic(db: Session):
+def predict_traffic(db: Session, test_mode: bool = False, test_time: datetime = None):
     try:
-        now = datetime.now(tz=ZoneInfo("Asia/Seoul"))
-        now = now.replace(
-            minute=(now.minute // 5) * 5,  # 5분 단위로 절삭
-            second=0,
-            microsecond=0
-        )
+        if test_mode and test_time:
+            now = test_time
+        else:
+            now = datetime.now(tz=ZoneInfo("Asia/Seoul"))
+            now = now.replace(
+                minute=(now.minute // 5) * 5,  # 5분 단위로 절삭
+                second=0,
+                microsecond=0
+            )
 
         time_intervals = [now - timedelta(minutes=5 * i) for i in range(24)]
-        # 시간 데이터를 판다스 데이터프레임으로 변환
         time_series = pd.DataFrame({'Time': sorted(time_intervals)})
-        # 데이터프레임 시간순 정렬 (이미 정렬된 상태)
         time_series_sorted = time_series.sort_values(by='Time').reset_index(drop=True)
 
         two_hours_ago = now - timedelta(hours=2)
@@ -68,20 +59,6 @@ def predict_traffic(db: Session):
         df_weather['tm'] = pd.to_datetime(df_weather['tm'])
         logging.info(f"Retrieved {len(df_weather)} weather records")
 
-        def resample_each_group(sub_df):
-            # 그룹 내부에서 tm을 인덱스로 잡고 리샘플링
-            return (sub_df
-                    .set_index('tm')
-                    .resample('5T')
-                    .ffill()
-                    )
-
-        df_weather_resampled = (
-            df_weather
-            .groupby(['nx', 'ny'], group_keys=False)
-            .apply(resample_each_group)
-            .reset_index()  # 인덱스를 풀어 컬럼화
-        )
         # 3. 링크 그리드 매핑 데이터 조회
         link_mapping = db.query(LinkGridMapping.link_id,
                                 LinkGridMapping.nx,
@@ -144,7 +121,8 @@ def predict_traffic(db: Session):
         # 예측 수행
         logging.info("Starting prediction process")
         reader = U.Datareader()
-        result = reader.process_data(df_combined, weakday)
+        output = reader.process_data(df_combined, weakday, time_series_sorted)
+        result = U.calculation(output)
         logging.info(f"Prediction completed for {len(result)} records")
 
         # 예측 결과 저장 (created_at:UTC, 예측 결과:result)
@@ -161,18 +139,37 @@ def predict_traffic(db: Session):
         # 예측 결과를 dictionary 리스트로 변환
         predictions_to_insert = result.assign(
             tm=now
-        )[['tm', 'link_id', 'prediction_5min', 'prediction_10min', 'prediction_15min', 'created_at']].to_dict('records')
+        )[['link_id', 'tm', 'prediction_5min', 'prediction_10min', 'prediction_15min', 'created_at']].to_dict('records')
 
-        try:
-            # bulk insert 실행
-            db.bulk_insert_mappings(TrafficPrediction, predictions_to_insert)
-            db.commit()
-            logging.info(f"Successfully committed prediction result at {now}")
-        except Exception as e:
-            logging.error(f"Bulk insert failed: {str(e)}")
-            raise
+        if not test_mode:
+            try:
+                # bulk insert 실행
+                db.bulk_insert_mappings(TrafficPrediction, predictions_to_insert)
+                db.commit()
+                logging.info(f"Successfully committed prediction result at {now}")
+            except Exception as e:
+                logging.error(f"Bulk insert failed: {str(e)}")
+                raise
+            return None
+        else:
+            return result
 
     except Exception as e:
         logging.error(f"Error in predict_traffic: {str(e)}", exc_info=True)
-        db.rollback()
+        if not test_mode:
+            db.rollback()
         raise
+
+if __name__ == '__main__':
+    from database import get_db
+
+    # 테스트 실행을 위한 시간 설정
+    test_time = datetime(2025, 1, 19, 8, 0, 0, tzinfo=ZoneInfo("Asia/Seoul"))
+
+    # 테스트 모드로 실행
+    db = next(get_db())
+    result = predict_traffic(db, test_mode=True, test_time=test_time)
+
+    if result is not None:
+        print("Test Results:")
+        print(result)
