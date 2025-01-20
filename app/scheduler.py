@@ -5,7 +5,7 @@ from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
 from contextlib import asynccontextmanager
 from database import get_db
 from fetch import fetch_data_weather, fetch_data_traffic
-# from predict.main import predict_traffic
+from predict.main import predict_traffic
 import logging
 
 logging.basicConfig(
@@ -41,13 +41,13 @@ def init_scheduler():
         id="fetch_traffic"
     )
 
-    # # 교통예측모델: 매시 0, 5, ... 55분에 실행
-    # scheduler.add_job(
-    #     predict_traffic,
-    #     trigger=CronTrigger(minute='*/5'),
-    #     args=[next(get_db())],
-    #     id="predict_traffic"
-    # )
+    # 교통예측모델: 매시 0, 5, ... 55분에 실행
+    scheduler.add_job(
+        predict_traffic,
+        trigger=CronTrigger(minute='*/5'),
+        args=[next(get_db())],
+        id="predict_traffic"
+    )
 
     scheduler.add_listener(job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
 

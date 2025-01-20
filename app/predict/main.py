@@ -1,7 +1,7 @@
 import logging
 import warnings
+from sqlalchemy.orm import Session
 from predict.model import utility as U
-from database import get_db
 from models import ItsTrafficData, KmaWeatherData, LinkGridMapping, TrafficPrediction
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -22,47 +22,49 @@ def read_config():
    return config
 
 
-# 단독실행 테스트 코드 (추후 async 및 db commit 추가)
-def predict_model():
+def predict_traffic(db: Session):
     try:
-        db = next(get_db())
-        # 모델 실행시점 (임시 지정)
-        now = datetime(2024, 10, 1, 2, 0)
+        now = datetime.now(tz=ZoneInfo("Asia/Seoul")).replace(second=0, microsecond=0)
         two_hours_ago = now - timedelta(hours=2)
+        logging.info(f"Starting traffic prediction for time window: {two_hours_ago} to {now}")
 
         # 모델 실행시점 이전 데이터 조회
         # 1. 교통 데이터 조회
-        traffic_rows = db.query(ItsTrafficData.tm, 
-                            ItsTrafficData.link_id, 
+        traffic_rows = db.query(ItsTrafficData.tm,
+                            ItsTrafficData.link_id,
                             ItsTrafficData.speed)\
                         .filter(ItsTrafficData.tm.between(two_hours_ago, now))\
                         .all()
 
         df_traffic = pd.DataFrame(traffic_rows, columns=['tm', 'link_id', 'speed'])
+        logging.info(f"Retrieved {len(df_traffic)} traffic records")
+        if len(df_traffic) == 0:
+            logging.warning("No traffic data found for the specified time period")
 
         # 2. 기상 데이터 조회 (기상 데이터는 조회 시간을 한시간 더 이전으로 설정)
         three_hours_ago = now - timedelta(hours=3)
-        weather_rows = db.query(KmaWeatherData.tm, 
-                            KmaWeatherData.nx, 
-                            KmaWeatherData.ny, 
-                            KmaWeatherData.pty, 
+        logging.info(f"Fetching weather data from {three_hours_ago} to {now}")
+        weather_rows = db.query(KmaWeatherData.tm,
+                            KmaWeatherData.nx,
+                            KmaWeatherData.ny,
+                            KmaWeatherData.pty,
                             KmaWeatherData.rn1)\
                         .filter(KmaWeatherData.tm.between(three_hours_ago, now))\
                         .all()
 
         df_weather = pd.DataFrame(weather_rows, columns=['tm', 'nx', 'ny', 'pty', 'rn1'])
-
+        logging.info(f"Retrieved {len(df_weather)} weather records")
 
         # 3. 링크 그리드 매핑 데이터 조회
-        link_mapping = db.query(LinkGridMapping.link_id, 
-                                LinkGridMapping.nx, 
+        link_mapping = db.query(LinkGridMapping.link_id,
+                                LinkGridMapping.nx,
                                 LinkGridMapping.ny).all()
         df_mapping = pd.DataFrame(link_mapping, columns=['link_id', 'nx', 'ny'])
 
         df_traffic_with_grid = df_traffic.merge(df_mapping, on='link_id', how='inner')
 
         # 4. 교통 데이터와 기상 데이터 결합
-        ## 기상데이터 5분 간격으로 리샘플 후 forward fill 
+        ## 기상데이터 5분 간격으로 리샘플 후 forward fill
         if len(df_weather) == 0:
             logging.warning("기상 데이터가 없습니다 - 기본값(0) 사용")
             # traffic 데이터의 모든 nx, ny 조합에 대해 0으로 채움
@@ -79,6 +81,7 @@ def predict_model():
                 'rn1': 0   # (결측 시 처리) 강수량 0
             })\
             .reset_index()
+            logging.info(f"Resampled weather data: {len(df_weather_resampled)} records")
 
         df_combined = df_traffic_with_grid.merge(
             df_weather_resampled,
@@ -87,11 +90,15 @@ def predict_model():
         )
 
         # 결측치 최종 확인
+        missing_pty = df_combined['pty'].isna().sum()
+        missing_rn1 = df_combined['rn1'].isna().sum()
+        if missing_pty > 0 or missing_rn1 > 0:
+            logging.warning(f"Missing values found - PTY: {missing_pty}, RN1: {missing_rn1}")
         df_combined['pty'] = df_combined['pty'].fillna(0)
         df_combined['rn1'] = df_combined['rn1'].fillna(0)
 
         # 요일 정보 계산
-        today = datetime.now(tz=ZoneInfo("Asia/Seoul"))
+        today = now
         # 공휴일 확인
         kr_holidays = holidays.KR()
         is_holiday = today.strftime('%Y-%m-%d') in kr_holidays
@@ -105,10 +112,13 @@ def predict_model():
             weakday = 1
         else:
             weakday = 0.1
+        logging.info(f"Day type calculation - Weekday: {weekday}, Holiday: {is_holiday}, Weight: {weakday}")
 
         # 예측 수행
+        logging.info("Starting prediction process")
         reader = U.Datareader()
         result = reader.process_data(df_combined, weakday)
+        logging.info(f"Prediction completed for {len(result)} records")
 
         # 예측 결과 저장 (created_at:UTC, 예측 결과:result)
         result['created_at'] = datetime.now()  # UTC 시간
@@ -121,18 +131,21 @@ def predict_model():
             }
         )
 
-        # 예측 결과 저장
-        db.add(TrafficPrediction(
-            tm=now,
-            link_id=result['link_id'],
-            prediction_5min=result['prediction_5min'],
-            prediction_10min=result['prediction_10min'],
-            prediction_15min=result['prediction_15min']
-        ))
-        db.commit()
-        logging.info(f"Successfully committed prediction result at {now}")
+        # 예측 결과를 dictionary 리스트로 변환
+        predictions_to_insert = result.assign(
+            tm=now
+        )[['tm', 'link_id', 'prediction_5min', 'prediction_10min', 'prediction_15min', 'created_at']].to_dict('records')
+
+        try:
+            # bulk insert 실행
+            db.bulk_insert_mappings(TrafficPrediction, predictions_to_insert)
+            db.commit()
+            logging.info(f"Successfully committed prediction result at {now}")
+        except Exception as e:
+            logging.error(f"Bulk insert failed: {str(e)}")
+            raise
 
     except Exception as e:
-        logging.error(f"Error committing prediction result: {str(e)}")
+        logging.error(f"Error in predict_traffic: {str(e)}", exc_info=True)
         db.rollback()
         raise

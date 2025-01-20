@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-WORKDIR /app
+WORKDIR /
 
 # 필요한 시스템 패키지 설치
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir pytz && \
     pip install --no-cache-dir scikit-learn && \
     pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
-COPY ./app ./app
+COPY ./app /app
 
-WORKDIR /app/app
+WORKDIR /app
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
