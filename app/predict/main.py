@@ -1,8 +1,26 @@
 import logging
 import warnings
 import sys
-sys.path.append('../../')
-sys.path.append('../')
+import os
+# 제거할 경로
+path_to_remove = '/home/ssy/git/fastapi-postgis-server/app/predict'
+
+# sys.path에서 제거
+if path_to_remove in sys.path:
+    sys.path.remove(path_to_remove)
+    print(f"Removed {path_to_remove} from sys.path")
+else:
+    print(f"{path_to_remove} not found in sys.path")
+# app 디렉토리를 sys.path에 추가
+app_path = '/home/ssy/git/fastapi-postgis-server/app'
+if app_path not in sys.path:
+    sys.path.append(app_path)
+    print(f"Added {app_path} to sys.path")
+#sys.path.append('../../')
+#sys.path.append('../')
+#sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+print("sys.path:", sys.path)
+print("Current working directory:", os.getcwd())
 from predict.model import utility as U
 from database import get_db
 from models import ItsTrafficData, KmaWeatherData, LinkGridMapping, TrafficPrediction
@@ -14,21 +32,19 @@ logging.basicConfig(level=logging.INFO)
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# 설정 파일 읽기 
-def read_config():
-   config = U.configparser.ConfigParser()
-   config.read('./model/config.ini')
-   
-   # 읽은 값 출력해보기
-   print(f"총 배열 개수: {config['arrays']['number']}")   
-   return config
 
 
 # 단독실행 테스트 코드 (추후 async 및 db commit 추가)
 def predict_model():
     db = next(get_db())
     # 모델 실행시점 (임시 지정)
-    now = datetime(2024, 10, 1, 2, 0)
+    now = datetime(2023, 9, 1, 10, 0)
+    nowp5 = now+timedelta(minutes=5)
+    time_intervals = [now - timedelta(minutes=5 * i) for i in range(24)]
+    # 시간 데이터를 판다스 데이터프레임으로 변환
+    time_series = pd.DataFrame({'Time': sorted(time_intervals)})
+    # 데이터프레임 시간순 정렬 (이미 정렬된 상태)
+    time_series_sorted = time_series.sort_values(by='Time').reset_index(drop=True)
     two_hours_ago = now - timedelta(hours=2)
 
     # 모델 실행시점 이전 데이터 조회
@@ -53,12 +69,23 @@ def predict_model():
                     .all()
 
     df_weather = pd.DataFrame(weather_rows, columns=['tm', 'nx', 'ny', 'pty', 'rn1'])
-    # 5분 간격으로 리샘플 후 forward fill
-    df_weather_resampled = df_weather.set_index('tm')\
-        .groupby(['nx', 'ny'])\
-        .resample('5T')\
-        .ffill()\
-        .reset_index() 
+    # tm이 datetime 컬럼이라고 가정
+    df_weather['tm'] = pd.to_datetime(df_weather['tm'])
+
+    def resample_each_group(sub_df):
+        # 그룹 내부에서 tm을 인덱스로 잡고 리샘플링
+        return (sub_df
+                .set_index('tm')
+                .resample('5T')
+                .ffill()
+            )
+
+    df_weather_resampled = (
+        df_weather
+        .groupby(['nx', 'ny'], group_keys=False)
+        .apply(resample_each_group)
+        .reset_index()  # 인덱스를 풀어 컬럼화
+    )
 
     # 3. 링크 그리드 매핑 데이터 조회
     link_mapping = db.query(LinkGridMapping.link_id, LinkGridMapping.nx, LinkGridMapping.ny).all()
@@ -72,20 +99,6 @@ def predict_model():
         on=['nx', 'ny', 'tm'],
         how='left'
     )
-
-    # 5. 교통 데이터와 기상 데이터 피벗
-    df_combined_pivot = df_combined.melt(
-        id_vars=['link_id', 'tm'],
-        value_vars=['speed', 'pty', 'rn1']
-    ).pivot_table(
-        index='link_id',
-        columns=['tm', 'variable'],
-        values='value'
-    ).reset_index()
-
-    target_time = datetime(2024, 10, 1, 1, 0)
-    print(df_combined_pivot[df_combined_pivot['link_id'] == '1030022200'][(target_time, 'speed')])
-
     # 요일 정보 계산
     today = datetime.now(tz=ZoneInfo("Asia/Seoul"))
     weekday = today.weekday()
@@ -97,41 +110,39 @@ def predict_model():
         weakday = 1
     else:
         weakday = 0.1
+    
+    print("weekday:", weekday)
+    return df_combined, weakday,time_series_sorted
 
-    reader = U.Datareader()
-
-    result = reader.process_data(df_combined,weakday)
-
-    # 예측 결과 저장 (created_at:UTC, 예측 결과:result)
-    result['created_at'] = datetime.now()  # UTC 시간
-    result = result.rename(columns=
-        {
-            'Link_ID': 'link_id',
-            '5 min': 'prediction_5min',
-            '10 min': 'prediction_10min',
-            '15 min': 'prediction_15min'
-        }
-    )
-
-   ## 예측 결과 저장
-   #db.add(TrafficPrediction(
-   #    tm=now,
-   #    link_id=result['link_id'],
-   #    prediction_5min=result['prediction_5min'],
-   #    prediction_10min=result['prediction_10min'],
-   #    prediction_15min=result['prediction_15min']
-   #))
-   #db.commit()
-
+#
+#reader = U.Datareader()
+#`
+#result = reader.process_data(df_combined,weakday)
+#
+## 예측 결과 저장 (created_at:UTC, 예측 결과:result)
+#result['created_at'] = datetime.now()  # UTC 시간
+#result = result.rename(columns=
+#    {
+#        'Link_ID': 'link_id',
+#        '5 min': 'prediction_5min',
+#        '10 min': 'prediction_10min',
+#        '15 min': 'prediction_15min'
+#    }
+#)
+#   # 예측 결과 저장
+#   db.add(TrafficPrediction(
+#       tm=now,
+#       link_id=result['link_id'],
+#       prediction_5min=result['prediction_5min'],
+#       prediction_10min=result['prediction_10min'],
+#       prediction_15min=result['prediction_15min']
+#   ))
+#   db.commit()
+#
 if __name__ == "__main__":
 
-    y=U.TestScript()
-    print(y)
-    print(y.shape)
-    reader=U.Datareader(option='test')
-    # test array 추가
-    A,B,C,D,E,F=reader.testarrays.copy()
-    print(f'test data:{A},{B},{C},{D},{E},{F}')
-    out=reader.process_data(A,B,C,D,E,F)
-    print (f'outdata:{out}')
-    print (out.shape)
+    U.TestScript()
+    A,B,C=predict_model()
+    reader=U.Datareader() 
+    output=reader.process_data(A,B,C)
+    Result=pd.DataFrame(U.calculation(output))
