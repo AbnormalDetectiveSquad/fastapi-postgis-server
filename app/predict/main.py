@@ -24,7 +24,12 @@ def read_config():
 
 def predict_traffic(db: Session):
     try:
-        now = datetime.now(tz=ZoneInfo("Asia/Seoul")).replace(second=0, microsecond=0)
+        now = datetime.now(tz=ZoneInfo("Asia/Seoul"))
+        now = now.replace(
+            minute=(now.minute // 5) * 5,  # 5분 단위로 절삭
+            second=0,
+            microsecond=0
+        )
         two_hours_ago = now - timedelta(hours=2)
         logging.info(f"Starting traffic prediction for time window: {two_hours_ago} to {now}")
 
