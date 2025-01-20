@@ -35,7 +35,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 # 단독실행 테스트 코드 (추후 async 및 db commit 추가)
-def predict_model():
+def predict_model(mainrun=False):
     db = next(get_db())
     # 모델 실행시점 (임시 지정)
     now = datetime(2023, 9, 1, 10, 0)
@@ -112,37 +112,45 @@ def predict_model():
         weakday = 0.1
     
     print("weekday:", weekday)
-    return df_combined, weakday,time_series_sorted
+ 
+    if not mainrun:
 
-#
-#reader = U.Datareader()
-#`
-#result = reader.process_data(df_combined,weakday)
-#
-## 예측 결과 저장 (created_at:UTC, 예측 결과:result)
-#result['created_at'] = datetime.now()  # UTC 시간
-#result = result.rename(columns=
-#    {
-#        'Link_ID': 'link_id',
-#        '5 min': 'prediction_5min',
-#        '10 min': 'prediction_10min',
-#        '15 min': 'prediction_15min'
-#    }
-#)
-#   # 예측 결과 저장
-#   db.add(TrafficPrediction(
-#       tm=now,
-#       link_id=result['link_id'],
-#       prediction_5min=result['prediction_5min'],
-#       prediction_10min=result['prediction_10min'],
-#       prediction_15min=result['prediction_15min']
-#   ))
-#   db.commit()
+        reader = U.Datareader()
+
+        result = reader.process_data(df_combined, weakday,time_series_sorted)
+
+        # 예측 결과 저장 (created_at:UTC, 예측 결과:result)
+        result['created_at'] = datetime.now()  # UTC 시간
+        result = result.rename(columns=
+            {
+                'Link_ID': 'link_id',
+                '5 min': 'prediction_5min',
+                '10 min': 'prediction_10min',
+                '15 min': 'prediction_15min'
+            }
+            )
+        # 예측 결과 저장
+        db.add(TrafficPrediction(
+            tm=now,
+            link_id=result['link_id'],
+            prediction_5min=result['prediction_5min'],
+            prediction_10min=result['prediction_10min'],
+            prediction_15min=result['prediction_15min']
+        ))
+        db.commit()
+
+        return
+
+    return df_combined, weakday,time_series_sorted
 #
 if __name__ == "__main__":
-
-    U.TestScript()
-    A,B,C=predict_model()
+    
+    Data,Holiday,Timestamp=predict_model(True)
+    
     reader=U.Datareader() 
-    output=reader.process_data(A,B,C)
-    Result=pd.DataFrame(U.calculation(output))
+    
+    output=reader.process_data(Data,Holiday,Timestamp)
+    
+    Result=U.calculation(output)
+    
+    print(Result)
