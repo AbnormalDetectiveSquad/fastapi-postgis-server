@@ -77,7 +77,7 @@ def predict_traffic(db: Session, test_mode: bool = False, test_time: datetime = 
             df_weather_resampled['rn1'] = 0
         else:
             df_weather_resampled = df_weather.set_index('tm')\
-            .groupby(['nx', 'ny'])\
+            .groupby(['nx', 'ny'], group_keys=False)\
             .resample('5T')\
             .ffill()\
             .fillna({
