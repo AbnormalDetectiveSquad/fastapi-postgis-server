@@ -120,9 +120,7 @@ def predict_traffic(db: Session, test_mode: bool = False, test_time: datetime = 
 
         # 예측 수행
         logging.info("Starting prediction process")
-        reader = U.Datareader()
-        output = reader.process_data(df_combined, weakday, time_series_sorted)
-        result = U.calculation(output)
+        result = U.process_data(df_combined, weakday, time_series_sorted)
         logging.info(f"Prediction completed for {len(result)} records")
 
         # 예측 결과 저장 (created_at:UTC, 예측 결과:result)
