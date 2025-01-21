@@ -15,14 +15,14 @@ warnings.filterwarnings("ignore", category=UserWarning)
 def predict_traffic(db: Session, test_mode: bool = False, test_time: datetime = None):
     try:
         if test_mode and test_time:
-            now = test_time
+            now = test_time.replace(tzinfo=None)
         else:
             now = datetime.now(tz=ZoneInfo("Asia/Seoul"))
             now = now.replace(
                 minute=(now.minute // 5) * 5,  # 5분 단위로 절삭
                 second=0,
                 microsecond=0
-            )
+            ).replace(tzinfo=None)
 
         time_intervals = [now - timedelta(minutes=5 * i) for i in range(24)]
         time_series = pd.DataFrame({'Time': sorted(time_intervals)})
@@ -164,7 +164,7 @@ if __name__ == '__main__':
     from database import get_db
 
     # 테스트 실행을 위한 시간 설정
-    test_time = datetime(2025, 1, 19, 8, 0, 0, tzinfo=ZoneInfo("Asia/Seoul"))
+    test_time = datetime(2025, 1, 18, 0, 0, 0, tzinfo=ZoneInfo("Asia/Seoul"))
 
     # 테스트 모드로 실행
     db = next(get_db())

@@ -28,7 +28,6 @@ Base = declarative_base()
 
 def get_db():
     db = SessionLocal()
-    print(DATABASE_URL)
     try:
         yield db
     finally:
