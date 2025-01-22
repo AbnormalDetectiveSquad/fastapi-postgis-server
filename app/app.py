@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 import models, schemas
 from database import get_db
-from scheduler import lifespan_scheduler, init_scheduler
+from scheduler import lifespan_scheduler, init_scheduler, start_prediction_model, stop_prediction_model, get_prediction_model_status
 
 app = FastAPI(lifespan=lifespan_scheduler)
 init_scheduler()
@@ -105,3 +105,15 @@ def read_traffic_data(
     
     return query.all()
 
+# 예측 모델 제어 엔드포인트 추가
+@app.post("/model/start")
+def start_model():
+    return start_prediction_model()
+
+@app.post("/model/stop")
+def stop_model():
+    return stop_prediction_model()
+
+@app.get("/model/status")
+def model_status():
+    return get_prediction_model_status()
