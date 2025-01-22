@@ -85,7 +85,7 @@ class TrafficPrediction(Base):
     prediction_5min = Column(Numeric(5,1), nullable=False)
     prediction_10min = Column(Numeric(5,1), nullable=False)
     prediction_15min = Column(Numeric(5,1), nullable=False)
-
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
 
 
 class linkidsortorder(Base):
