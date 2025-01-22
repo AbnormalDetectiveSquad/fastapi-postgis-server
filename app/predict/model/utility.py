@@ -122,7 +122,8 @@ def get_parameters():
     parser.add_argument('--mode', type=str, default='train', help='test or train')
     parser.add_argument('--HotEncoding', type=str, default="On", help='On or Off')
     parser.add_argument('--Continue', type=str, default="False", help='True or False')
-    args = parser.parse_args()     
+    args = parser.parse_args([]) # 스케줄러 실행 시 기본 값 사용
+
     Ko = args.n_his - (args.Kt - 1) * 2 * args.stblock_num
     blocks = []
     blocks.append([args.features])
