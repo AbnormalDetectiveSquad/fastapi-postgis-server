@@ -7,6 +7,7 @@ from typing import Optional
 import models, schemas
 from database import get_db
 from scheduler import lifespan_scheduler, init_scheduler, start_prediction_model, stop_prediction_model, get_prediction_model_status
+import pandas as pd
 
 app = FastAPI(lifespan=lifespan_scheduler)
 init_scheduler()
@@ -117,3 +118,52 @@ def stop_model():
 @app.get("/model/status")
 def model_status():
     return get_prediction_model_status()
+
+@app.get("/prediction/{target_tm}")
+def load_prediction_data(target_tm: str, db: Session = Depends(get_db)):
+    try:
+        traffic_prediction = db.query(models.TrafficPrediction.tm,
+                models.TrafficPrediction.link_id,
+                models.TrafficPrediction.tm,
+                models.TrafficPrediction.prediction_5min,
+                models.TrafficPrediction.prediction_10min,
+                models.TrafficPrediction.prediction_15min)\
+            .filter(models.TrafficPrediction.tm == target_tm)\
+            .all()
+        link_inform=db.query(models.linkidsortorder.start_longitude,
+                models.linkidsortorder.start_latitude,
+                models.linkidsortorder.end_longitude,
+                models.linkidsortorder.end_latitude,
+                models.linkidsortorder.middle_longitude,
+                models.linkidsortorder.middle_latitude,
+                models.linkidsortorder.year_avg_velocity)
+
+        traffic_prediction = df.DataFrame(traffic_prediction,columns=['link_id','prediction_5min','prediction_10min','prediction_15min'])
+        link_inform= df.DataFrame(link_inform,column=['start_longitude','start_latitude','end_longitude','end_latitude','middle_longitude','middle_latitude','year_avg_velocity'])
+        if traffic_prediction is None or link_inform is None:
+            raise HTTPException(status_code=404, detail="Prediction not found")
+        # 응답 데이터 직접 변환
+        response_data = {
+            "link_id": traffic_prediction['link_id'],
+            "5 min": traffic_prediction['prediction_5min'],
+            "10 min": traffic_prediction['prediction_10min'],
+            "15 min": traffic_prediction['prediction_15min'],
+            "start_longitude": link_inform['start_longitude'],
+            "start_latitude": link_inform['start_latitude'],
+            "end_longitude": link_inform['end_longitude'],
+            "end_latitude": link_inform['end_latitude'],
+            "middle_longitude": link_inform['middle_longitude'],
+            "middle_latitude": link_inform['middle_latitude'],
+            "year_avg_velocity": link_inform['year_avg_velocity']
+        }
+        return response_data
+    except Exception as e:
+        raise HTTPException(status_code=404, detail="Prediction not found") from e
+
+
+
+
+
+
+
+

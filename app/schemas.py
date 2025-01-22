@@ -69,6 +69,8 @@ class ItsTrafficDataBase(BaseModel):
     speed: Optional[Decimal] = None
     travel_time: Optional[int] = None
 
+
+
 class ItsTrafficDataCreate(ItsTrafficDataBase):
     pass
 
