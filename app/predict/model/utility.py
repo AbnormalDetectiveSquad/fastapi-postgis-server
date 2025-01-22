@@ -203,7 +203,7 @@ def process_data(df_combined,weakday,time_series_sorted):
     pivot_speed = pivot_speed_interpolated.copy()
     if bool(np.isnan(pivot_speed).any().any()):
         nan_count = np.isnan(pivot_speed).sum()
-        raise ValueError(f"NaN values found in speed matrix. Total NaN count: {nan_count}")
+
     finaldata=df_combined.copy()
     pivot_holiday = finaldata.pivot_table(
                 index=['tm'],
@@ -241,7 +241,7 @@ def process_data(df_combined,weakday,time_series_sorted):
     if bool(np.isnan(pivot_PTY).any().any()):
         nan_count = np.isnan(pivot_PTY).sum()
         pivot_PTY = pivot_PTY.fillna(0)
-        raise ValueError(f"NaN values found in PTY matrix. Total NaN count: {nan_count}")
+
     finaldata=df_combined.copy()
     pivot_RN1_p = finaldata.pivot_table(
         index=['tm'],
@@ -255,7 +255,7 @@ def process_data(df_combined,weakday,time_series_sorted):
     if bool(np.isnan(pivot_RN1).any().any()):
         nan_count = np.isnan(pivot_RN1).sum()
         pivot_RN1 = pivot_RN1.fillna(0)
-        raise ValueError(f"NaN values found in RN1 matrix. Total NaN count: {nan_count}")
+
     batch_speed_array=np.expand_dims(pivot_speed.to_numpy(dtype='float32'),axis=0)
     batch_holiday_array = np.expand_dims(pivot_holiday.to_numpy(dtype='float32'),axis=0)
     batch_date_array= np.expand_dims(pivot_date.to_numpy(dtype='float32'),axis=0)

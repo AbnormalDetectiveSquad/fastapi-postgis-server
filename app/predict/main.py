@@ -125,6 +125,18 @@ def predict_traffic(db: Session, test_mode: bool = False, test_time: datetime = 
 
         # 예측 결과 저장 (created_at:UTC, 예측 결과:result)
         result['created_at'] = datetime.now()  # UTC 시간
+
+        # NaN 값 체크 및 로깅
+        nan_counts = result[['5 min', '10 min', '15 min']].isna().sum()
+        if nan_counts.sum() > 0:
+            logging.warning(f"NaN values found in prediction results: {nan_counts}")
+            
+        result = result.fillna({
+            '5 min': -1,
+            '10 min': -1,
+            '15 min': -1
+        })
+
         result = result.rename(columns=
             {
                 'Link_ID': 'link_id',
@@ -133,7 +145,7 @@ def predict_traffic(db: Session, test_mode: bool = False, test_time: datetime = 
                 '15 min': 'prediction_15min'
             }
         )
-
+        
         # 예측 결과를 dictionary 리스트로 변환
         predictions_to_insert = result.assign(
             tm=now

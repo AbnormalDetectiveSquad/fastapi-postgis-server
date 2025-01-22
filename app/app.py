@@ -60,7 +60,7 @@ def read_location(location_id: str, db: Session = Depends(get_db)):
     return response_data
 
 #-- Link Node Network
-@ app.post("/links/", response_model=schemas.LinkNodeNetwork)
+@app.post("/links/", response_model=schemas.LinkNodeNetwork)
 def create_link(link: schemas.LinkNodeNetworkCreate, db: Session = Depends(get_db)):
     db_link = models.LinkNodeNetwork(**link.dict())
     db.add(db_link)
