@@ -100,3 +100,4 @@ class linkidsortorder(Base):
     middle_longitude = Column(Float)
     middle_latitude = Column(Float)
     year_avg_velocity = Column(Float)
+
