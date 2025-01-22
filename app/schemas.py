@@ -68,12 +68,6 @@ class ItsTrafficDataBase(BaseModel):
     road_authority: Optional[int] = None
     speed: Optional[Decimal] = None
     travel_time: Optional[int] = None
-class Prediction(BaseModel):
-    tm: datetime
-    link_id: str
-    road_authority: Optional[int] = None
-    speed: Optional[Decimal] = None
-    travel_time: Optional[int] = None
 
 
 
