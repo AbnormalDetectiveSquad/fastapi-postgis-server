@@ -1,8 +1,6 @@
 import logging
 import warnings
 from sqlalchemy.orm import Session
-import sys
-sys.path.append(r'C:\Users\USER\Desktop\inner\이상치탐지\git\api_DB\app')
 from predict.model import utility as U
 from models import ItsTrafficData, KmaWeatherData, LinkGridMapping, TrafficPrediction
 from datetime import datetime, timedelta
