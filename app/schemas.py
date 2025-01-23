@@ -75,8 +75,6 @@ class ItsTrafficDataCreate(ItsTrafficDataBase):
     pass
 
 class ItsTrafficData(ItsTrafficDataBase):
-    created_at: datetime
-
     class Config:
         from_attributes = True
 
