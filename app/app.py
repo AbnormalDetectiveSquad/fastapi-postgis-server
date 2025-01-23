@@ -122,12 +122,13 @@ def model_status():
 @app.get("/prediction/{target_tm}")
 def load_prediction_data(target_tm: str, db: Session = Depends(get_db)):
     try:
-        traffic_prediction = db.query(models.TrafficPrediction.tm,
+        traffic_prediction = db.query( models.TrafficPrediction.tm,
                 models.TrafficPrediction.link_id,
                 models.TrafficPrediction.tm,
                 models.TrafficPrediction.prediction_5min,
                 models.TrafficPrediction.prediction_10min,
-                models.TrafficPrediction.prediction_15min)\
+                models.TrafficPrediction.prediction_15min,
+                models.TrafficPrediction.created_at)\
             .filter(models.TrafficPrediction.tm == target_tm)\
             .all()
         link_inform=db.query(models.linkidsortorder.start_longitude,
@@ -136,10 +137,11 @@ def load_prediction_data(target_tm: str, db: Session = Depends(get_db)):
                 models.linkidsortorder.end_latitude,
                 models.linkidsortorder.middle_longitude,
                 models.linkidsortorder.middle_latitude,
-                models.linkidsortorder.year_avg_velocity)
+                models.linkidsortorder.year_avg_velocity,
+                models.linkidsortorder.matrix_index)
 
-        traffic_prediction = df.DataFrame(traffic_prediction,columns=['link_id','prediction_5min','prediction_10min','prediction_15min'])
-        link_inform= df.DataFrame(link_inform,column=['start_longitude','start_latitude','end_longitude','end_latitude','middle_longitude','middle_latitude','year_avg_velocity'])
+        traffic_prediction = pd.DataFrame(traffic_prediction,columns=['link_id','tm','prediction_5min','prediction_10min','prediction_15min','at'])
+        link_inform= pd.DataFrame(link_inform,columns=['start_longitude','start_latitude','end_longitude','end_latitude','middle_longitude','middle_latitude','year_avg_velocity','mi'])
         if traffic_prediction is None or link_inform is None:
             raise HTTPException(status_code=404, detail="Prediction not found")
         # 응답 데이터 직접 변환

@@ -90,7 +90,7 @@ class TrafficPrediction(Base):
 
 class linkidsortorder(Base):
     __tablename__ = 'link_id_sort_order'
-
+    
     matrix_index = Column(Integer, primary_key=True, nullable=False)
     link_id = Column(String(10), primary_key=True, nullable=False)
     start_longitude = Column(Float)
