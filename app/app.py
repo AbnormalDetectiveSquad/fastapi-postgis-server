@@ -6,7 +6,8 @@ from datetime import datetime
 from typing import Optional
 import models, schemas
 from database import get_db
-from scheduler import lifespan_scheduler, init_scheduler
+from scheduler import lifespan_scheduler, init_scheduler, start_prediction_model, stop_prediction_model, get_prediction_model_status
+from pydantic import BaseModel 
 import pandas as pd
 
 app = FastAPI(lifespan=lifespan_scheduler)
@@ -61,7 +62,7 @@ def read_location(location_id: str, db: Session = Depends(get_db)):
     return response_data
 
 #-- Link Node Network
-@ app.post("/links/", response_model=schemas.LinkNodeNetwork)
+@app.post("/links/", response_model=schemas.LinkNodeNetwork)
 def create_link(link: schemas.LinkNodeNetworkCreate, db: Session = Depends(get_db)):
     db_link = models.LinkNodeNetwork(**link.dict())
     db.add(db_link)
@@ -106,11 +107,23 @@ def read_traffic_data(
     
     return query.all()
 
+# 예측 모델 제어 엔드포인트 추가
+@app.post("/model/start")
+def start_model():
+    return start_prediction_model()
 
+@app.post("/model/stop")
+def stop_model():
+    return stop_prediction_model()
+
+@app.get("/model/status")
+def model_status():
+    return get_prediction_model_status()
 
 @app.get("/prediction/{target_tm}")
 def load_prediction_data(target_tm: str, db: Session = Depends(get_db)):
     try:
+        target_tm = datetime.strptime(target_tm, '%Y-%m-%d %H:%M:%S')
         traffic_prediction = db.query( models.TrafficPrediction.tm,
                 models.TrafficPrediction.link_id,
                 models.TrafficPrediction.tm,
@@ -118,8 +131,16 @@ def load_prediction_data(target_tm: str, db: Session = Depends(get_db)):
                 models.TrafficPrediction.prediction_10min,
                 models.TrafficPrediction.prediction_15min,
                 models.TrafficPrediction.created_at)\
-            .filter(models.TrafficPrediction.tm == target_tm)\
-            .all()
+               .filter(models.TrafficPrediction.tm == target_tm).all()
+        traffic_df = pd.DataFrame([{
+          'tm': row.tm,
+          'link_id': row.link_id,
+          'prediction_5min': float(row.prediction_5min),
+          'prediction_10min': float(row.prediction_10min),
+          'prediction_15min': float(row.prediction_15min),
+          'at': row.created_at
+          } for row in traffic_prediction],
+        columns=['tm', 'link_id', 'prediction_5min', 'prediction_10min', 'prediction_15min', 'at']) 
         link_inform=db.query(models.linkidsortorder.start_longitude,
                 models.linkidsortorder.start_latitude,
                 models.linkidsortorder.end_longitude,
@@ -128,24 +149,23 @@ def load_prediction_data(target_tm: str, db: Session = Depends(get_db)):
                 models.linkidsortorder.middle_latitude,
                 models.linkidsortorder.year_avg_velocity,
                 models.linkidsortorder.matrix_index)
-        
-        traffic_prediction = pd.DataFrame(traffic_prediction,columns=['link_id','tm','prediction_5min','prediction_10min','prediction_15min','at'])
         link_inform= pd.DataFrame(link_inform,columns=['start_longitude','start_latitude','end_longitude','end_latitude','middle_longitude','middle_latitude','year_avg_velocity','mi'])
         if traffic_prediction is None or link_inform is None:
-            raise HTTPException(status_code=404, detail="Prediction not found")
+           raise HTTPException(status_code=404, detail="Prediction not found")
         # 응답 데이터 직접 변환
         response_data = {
-            "link_id": traffic_prediction['link_id'],
-            "5 min": traffic_prediction['prediction_5min'],
-            "10 min": traffic_prediction['prediction_10min'],
-            "15 min": traffic_prediction['prediction_15min'],
+            "tm" : traffic_df['tm'],
+            "link_id": traffic_df['link_id'],
+            "5 min": traffic_df['prediction_5min'],
+            "10 min": traffic_df['prediction_10min'],
+            "15 min": traffic_df['prediction_15min'],
             "start_longitude": link_inform['start_longitude'],
             "start_latitude": link_inform['start_latitude'],
             "end_longitude": link_inform['end_longitude'],
             "end_latitude": link_inform['end_latitude'],
             "middle_longitude": link_inform['middle_longitude'],
             "middle_latitude": link_inform['middle_latitude'],
-            "year_avg_velocity": link_inform['year_avg_velocity']  
+            "year_avg_velocity": link_inform['year_avg_velocity']
         }
         return response_data
     except Exception as e:
@@ -155,6 +175,23 @@ def load_prediction_data(target_tm: str, db: Session = Depends(get_db)):
 
 
 
+@app.get("/get_test")
+def get_test():
+    return {"message": "This is a GET test"}
+class InputModel(BaseModel):
+    input: str
+
+@app.post("/post_test")
+def post_teet(input: InputModel):
+    try:
+        print(input.input)
+        response_data={
+            "respons" : input.input
+        }
+        return response_data
+    except Exception as e:
+        print(f"No string: {e}")  
+        return "This method is a test function that returns the input string as is."  
 
 
 
