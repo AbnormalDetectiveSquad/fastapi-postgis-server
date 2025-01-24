@@ -15,15 +15,19 @@ init_scheduler()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 실제 운영 환경에서는 구체적인 도메인을 지정하는 것이 좋습니다
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # 혹은 ["GET", "POST", "PUT", "DELETE"] 등 필요한 메소드만
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the API"}
+
+@app.get("/get_test")
+def get_test():
+    return {"message": "get_test"}
 
 # -- Location Master
 @app.post("/locations/", response_model=schemas.Location)
