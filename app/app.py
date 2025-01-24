@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from geoalchemy2.shape import from_shape, to_shape
 from shapely.geometry import Point, LineString, mapping
@@ -11,6 +12,14 @@ import pandas as pd
 
 app = FastAPI(lifespan=lifespan_scheduler)
 init_scheduler()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 실제 운영 환경에서는 구체적인 도메인을 지정하는 것이 좋습니다
+    allow_credentials=True,
+    allow_methods=["*"],  # 혹은 ["GET", "POST", "PUT", "DELETE"] 등 필요한 메소드만
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def read_root():
