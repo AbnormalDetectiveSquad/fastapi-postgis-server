@@ -152,24 +152,43 @@ def load_prediction_data(target_tm: str, db: Session = Depends(get_db)):
         link_inform= pd.DataFrame(link_inform,columns=['start_longitude','start_latitude','end_longitude','end_latitude','middle_longitude','middle_latitude','year_avg_velocity','mi'])
         if traffic_prediction is None or link_inform is None:
            raise HTTPException(status_code=404, detail="Prediction not found")
-        # 응답 데이터 직접 변환
-        response_data = {
-            "tm" : traffic_df['tm'],
-            "link_id": traffic_df['link_id'],
-            "5 min": traffic_df['prediction_5min'],
-            "10 min": traffic_df['prediction_10min'],
-            "15 min": traffic_df['prediction_15min'],
-            "start_longitude": link_inform['start_longitude'],
-            "start_latitude": link_inform['start_latitude'],
-            "end_longitude": link_inform['end_longitude'],
-            "end_latitude": link_inform['end_latitude'],
-            "middle_longitude": link_inform['middle_longitude'],
-            "middle_latitude": link_inform['middle_latitude'],
-            "year_avg_velocity": link_inform['year_avg_velocity']
-        }
+        # 응답 데이터를 위한 리스트
+        response_data = []
+
+        # 각 traffic_row에 대해 매칭된 link_row를 찾아 추가
+        for _, traffic_row in traffic_df.iterrows():
+            # link_inform에서 해당 row 찾기
+            matched_link = link_inform.loc[link_inform['mi'] == traffic_row['link_id']]
+            if matched_link.empty:
+                continue  # 매칭 실패 시 건너뜀
+            
+            # matched_link에서 첫 번째 행 추출
+            link_row = matched_link.iloc[0]
+
+            # 새로운 row 생성
+            new_row = {
+                "tm": traffic_row["tm"],
+                "link_id": traffic_row["link_id"],
+                "prediction_5min": traffic_row["prediction_5min"],
+                "prediction_10min": traffic_row["prediction_10min"],
+                "prediction_15min": traffic_row["prediction_15min"],
+                "start_longitude": link_row["start_longitude"],
+                "start_latitude": link_row["start_latitude"],
+                "end_longitude": link_row["end_longitude"],
+                "end_latitude": link_row["end_latitude"],
+                "middle_longitude": link_row["middle_longitude"],
+                "middle_latitude": link_row["middle_latitude"],
+                "year_avg_velocity": link_row["year_avg_velocity"]
+            }
+
+            # 응답 리스트에 추가
+            response_data.append(new_row)
+
+        # 최종 응답 반환
         return response_data
+
     except Exception as e:
-        raise HTTPException(status_code=404, detail="Prediction not found") from e
+        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
 
 
